@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">出席QR</string>
+    <string name="tt_title">時間割の編集</string>
+    <string name="a11y_label">出席QR：ロック画面の小さなカード</string>
+    <string name="a11y_summary">ロック画面にQRコードの小さなカードを表示します</string>
+    <string name="a11y_desc">設定した時間帯のあいだ、ロック画面の上に出席確認用QRコードと時間割の小さなカードを重ねて表示するためだけに使います。画面の内容を読み取ったり、操作を代行したりはしません。</string>
+</resources>
