@@ -46,6 +46,68 @@ public class CardService extends AccessibilityService {
     private boolean shown;
     private boolean receiverRegistered;
     private int state; // 0=小さいチップ 1=カード 2=QRを大きく
+    private Bitmap qrCache;
+    private long qrCacheKey;
+    private android.hardware.display.DisplayManager displayManager;
+    private boolean displayListenerRegistered;
+    private boolean polling;
+
+    /** ロック解除をすぐ検知するため、表示中だけ短い間隔で確認する。 */
+    private final Runnable poll = new Runnable() {
+        @Override
+        public void run() {
+            polling = false;
+            if (!shown) return;
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+            if (pm == null || !pm.isInteractive()) return; // 消灯中は確認しない（点灯時に再開）
+            KeyguardManager km = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
+            if (km == null || !km.isKeyguardLocked()) {
+                hide();
+                return;
+            }
+            startPoll();
+        }
+    };
+
+    private void startPoll() {
+        if (polling) return;
+        polling = true;
+        handler.postDelayed(poll, 80);
+    }
+
+    /** 画面の点灯/消灯を、ブロードキャストより早く知るためのリスナー。 */
+    private final android.hardware.display.DisplayManager.DisplayListener displayListener =
+            new android.hardware.display.DisplayManager.DisplayListener() {
+                int last = -1;
+
+                @Override
+                public void onDisplayAdded(int id) {
+                }
+
+                @Override
+                public void onDisplayRemoved(int id) {
+                }
+
+                @Override
+                public void onDisplayChanged(int id) {
+                    if (id != android.view.Display.DEFAULT_DISPLAY || displayManager == null) return;
+                    android.view.Display d = displayManager.getDisplay(id);
+                    if (d == null) return;
+                    int st = d.getState();
+                    if (st == last) return;
+                    last = st;
+                    if (st == android.view.Display.STATE_ON) {
+                        update(1);
+                    } else {
+                        onScreenOff();
+                    }
+                }
+            };
+
+    private void onScreenOff() {
+        if (state == 2 || !shown) state = restState(); // 次に点けたときは標準の大きさから
+        update(0);
+    }
 
     /** このサービスが有効で、かつ「小さなカード」方式が選ばれているか。 */
     static boolean active(Context c) {
@@ -74,8 +136,7 @@ public class CardService extends AccessibilityService {
         public void onReceive(Context context, Intent intent) {
             String a = intent.getAction();
             if (Intent.ACTION_SCREEN_OFF.equals(a)) {
-                state = restState(); // 次に点けたときは標準の大きさから
-                hide();
+                onScreenOff();
             } else if (Intent.ACTION_USER_PRESENT.equals(a)) {
                 hide();
             } else {
@@ -112,6 +173,12 @@ public class CardService extends AccessibilityService {
             }
             receiverRegistered = true;
         }
+        displayManager = (android.hardware.display.DisplayManager)
+                getSystemService(DISPLAY_SERVICE);
+        if (displayManager != null && !displayListenerRegistered) {
+            displayManager.registerDisplayListener(displayListener, handler);
+            displayListenerRegistered = true;
+        }
         Scheduler.sync(this);
         update();
     }
@@ -139,6 +206,15 @@ public class CardService extends AccessibilityService {
 
     private void shutdown() {
         hide();
+        handler.removeCallbacks(poll);
+        polling = false;
+        if (displayListenerRegistered && displayManager != null) {
+            try {
+                displayManager.unregisterDisplayListener(displayListener);
+            } catch (Exception ignored) {
+            }
+            displayListenerRegistered = false;
+        }
         if (receiverRegistered) {
             try {
                 unregisterReceiver(receiver);
@@ -159,19 +235,33 @@ public class CardService extends AccessibilityService {
         return Ui.dp(this, v);
     }
 
-    /** いま表示すべきかを判定して、出す/消す/内容更新を行う。 */
+    /**
+     * いま表示すべきかを判定して、出す/消す/内容更新を行う。
+     * 消灯中は見えない状態で先に用意しておき、点灯した瞬間に見えるようにする。
+     */
     private void update() {
+        update(-1);
+    }
+
+    /** screen: 1=点灯した直後 0=消灯した直後 -1=システムに問い合わせる */
+    private void update(int screen) {
         KeyguardManager km = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        boolean on = screen >= 0 ? screen == 1 : (pm != null && pm.isInteractive());
+        boolean locked = km != null && km.isKeyguardLocked();
         boolean want = Prefs.mode(this) == Prefs.MODE_FLOAT
                 && Scheduler.isActiveNow(this)
-                && km != null && km.isKeyguardLocked()
-                && pm != null && pm.isInteractive();
-        if (want) {
-            show();
-        } else {
+                && (!on || locked);
+        if (!want) {
             hide();
+            return;
         }
+        show();
+        if (holder != null) {
+            // 消灯中（常時表示ディスプレイを含む）は透明にしておく
+            holder.setAlpha(on ? 1f : 0f);
+        }
+        if (on) startPoll();
     }
 
     private void hide() {
@@ -368,7 +458,7 @@ public class CardService extends AccessibilityService {
         if (!shown || holder == null) return;
         final int accent = Ui.accent(this);
         String[] sum = TT.summary(this);
-        Bitmap qr = QrService.loadQr(this, 900);
+        Bitmap qr = cachedQr();
         int screenW = getResources().getDisplayMetrics().widthPixels;
         int tint = Ui.mix(accent, Color.WHITE, 0.4f);
 
@@ -544,6 +634,17 @@ public class CardService extends AccessibilityService {
             wm.updateViewLayout(holder, lp);
         } catch (Exception ignored) {
         }
+    }
+
+    /** QR画像は毎回読み直さず、ファイルが変わったときだけ読み込む。 */
+    private Bitmap cachedQr() {
+        java.io.File f = Prefs.qrFile(this);
+        long key = f.exists() ? f.lastModified() * 31 + f.length() : 0;
+        if (key != qrCacheKey || (qrCache == null && key != 0)) {
+            qrCache = key == 0 ? null : QrService.loadQr(this, 900);
+            qrCacheKey = key;
+        }
+        return qrCache;
     }
 
     private View qrView(Bitmap qr, float padDp, float radiusDp) {
