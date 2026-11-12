@@ -165,7 +165,7 @@ final class TT {
                 lines.append(" / ").append(e.name);
             } else {
                 if (lines.length() > 0) lines.append("\n");
-                lines.append(Prefs.hm(startOf(e.s))).append("  ").append(e.name);
+                lines.append(periodLabel(e)).append("限  ").append(e.name);
             }
             int st = startOf(e.s), en = endOf(e.e);
             if (!found && nowMin < en) {

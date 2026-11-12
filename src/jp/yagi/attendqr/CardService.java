@@ -286,7 +286,7 @@ public class CardService extends AccessibilityService {
                             | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                     PixelFormat.TRANSLUCENT);
             lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-            lp.y = clampY(Prefs.sp(this).getInt(Prefs.K_CARD_Y, dp(190)));
+            lp.y = clampY(Prefs.sp(this).getInt(Prefs.K_CARD_Y, dp(140)));
             lp.setTitle("出席QR");
             try {
                 wm.addView(holder, lp);
@@ -432,9 +432,9 @@ public class CardService extends AccessibilityService {
             dl.rightMargin = dp(9);
             row.addView(dot, dl);
 
-            TextView time = Ui.text(this, Prefs.hm(st), 13, strong
+            TextView time = Ui.text(this, TT.periodLabel(e) + "限", 13, strong
                     ? Ui.mix(accent, Color.WHITE, 0.45f) : subColor, Ui.MEDIUM);
-            row.addView(time, new LinearLayout.LayoutParams(dp(46), WRAP));
+            row.addView(time, new LinearLayout.LayoutParams(dp(56), WRAP));
 
             TextView name = Ui.text(this, names.toString(), 14, nameColor,
                     strong ? Ui.BOLD : Ui.MEDIUM);
@@ -496,7 +496,7 @@ public class CardService extends AccessibilityService {
                 }
             });
         } else if (state == 1) {
-            // ---- 標準のカード：大きめのQR＋いま/つぎの授業＋きょうの時間割
+            // ---- 標準のカード：上に授業名、中央に大きなQR、下にきょうの時間割
             int width = Math.min(screenW - dp(24), dp(420));
             int inner = width - dp(28);
             card.setOrientation(LinearLayout.VERTICAL);
@@ -505,54 +505,24 @@ public class CardService extends AccessibilityService {
             LinearLayout top = new LinearLayout(this);
             top.setOrientation(LinearLayout.HORIZONTAL);
             top.setGravity(Gravity.CENTER_VERTICAL);
-
-            int qrSize = Math.min(dp(156), Math.round(inner * 0.46f));
-            View q = qrView(qr, 9, 18);
-            q.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    setState(2);
-                }
-            });
-            top.addView(q, new LinearLayout.LayoutParams(qrSize, qrSize));
-
-            LinearLayout right = new LinearLayout(this);
-            right.setOrientation(LinearLayout.VERTICAL);
-            right.setPadding(dp(14), 0, 0, 0);
+            LinearLayout texts = new LinearLayout(this);
+            texts.setOrientation(LinearLayout.VERTICAL);
             Calendar cal = Calendar.getInstance();
-            right.addView(Ui.text(this, "出席QR ・ " + Prefs.cls(this) + " ・ "
+            texts.addView(Ui.text(this, "出席QR ・ " + Prefs.cls(this) + " ・ "
                     + TT.DAY_NAMES[Prefs.dayIndex(cal)] + "曜", 11, tint, Ui.MEDIUM));
             TextView h = Ui.text(this, sum[0], 17, Ui.D_TEXT, Ui.BOLD);
-            h.setMaxLines(2);
+            h.setSingleLine(true);
             h.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            h.setLineSpacing(dp(2), 1f);
-            h.setPadding(0, dp(8), 0, 0);
-            right.addView(h);
+            h.setPadding(0, dp(6), 0, 0);
+            texts.addView(h);
             if (sum[1].length() > 0) {
                 TextView sb = Ui.text(this, sum[1], 12, Ui.D_TEXT2, Ui.REGULAR);
-                sb.setMaxLines(2);
-                sb.setPadding(0, dp(5), 0, 0);
-                right.addView(sb);
+                sb.setSingleLine(true);
+                sb.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                sb.setPadding(0, dp(4), 0, 0);
+                texts.addView(sb);
             }
-            TextView done = smallButton("出席した", accent, Ui.onColor(accent));
-            done.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    markDone();
-                }
-            });
-            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(MATCH, WRAP);
-            dlp.topMargin = dp(12);
-            right.addView(done, dlp);
-            LinearLayout mini = new LinearLayout(this);
-            mini.setOrientation(LinearLayout.HORIZONTAL);
-            TextView bigger = smallButton("QR拡大", Ui.D_GLASS, Ui.D_TEXT);
-            bigger.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    setState(2);
-                }
-            });
+            top.addView(texts, new LinearLayout.LayoutParams(0, WRAP, 1f));
             TextView smaller = smallButton("小さく", Ui.D_GLASS, Ui.D_TEXT);
             smaller.setOnClickListener(new View.OnClickListener() {
                 @Override
@@ -560,18 +530,50 @@ public class CardService extends AccessibilityService {
                     setState(0);
                 }
             });
-            LinearLayout.LayoutParams m1 = new LinearLayout.LayoutParams(0, WRAP, 1f);
-            LinearLayout.LayoutParams m2 = new LinearLayout.LayoutParams(0, WRAP, 1f);
-            m2.leftMargin = dp(6);
-            mini.addView(bigger, m1);
-            mini.addView(smaller, m2);
-            LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(MATCH, WRAP);
-            mlp.topMargin = dp(6);
-            right.addView(mini, mlp);
-            top.addView(right, new LinearLayout.LayoutParams(0, WRAP, 1f));
+            LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(WRAP, WRAP);
+            slp.leftMargin = dp(8);
+            top.addView(smaller, slp);
             card.addView(top, new LinearLayout.LayoutParams(inner, WRAP));
 
+            int qrSize = Math.min(dp(250), Math.round(inner * 0.74f));
+            View q = qrView(qr, 12, 20);
+            q.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    setState(2);
+                }
+            });
+            LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(qrSize, qrSize);
+            qlp.gravity = Gravity.CENTER_HORIZONTAL;
+            qlp.topMargin = dp(12);
+            card.addView(q, qlp);
+
             addTimetable(card, inner, accent);
+
+            LinearLayout btns = new LinearLayout(this);
+            btns.setOrientation(LinearLayout.HORIZONTAL);
+            TextView done = smallButton("出席した", accent, Ui.onColor(accent));
+            done.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    markDone();
+                }
+            });
+            TextView bigger = smallButton("QRをさらに拡大", Ui.D_GLASS, Ui.D_TEXT);
+            bigger.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    setState(2);
+                }
+            });
+            LinearLayout.LayoutParams m1 = new LinearLayout.LayoutParams(0, WRAP, 1f);
+            LinearLayout.LayoutParams m2 = new LinearLayout.LayoutParams(0, WRAP, 1f);
+            m2.leftMargin = dp(8);
+            btns.addView(done, m1);
+            btns.addView(bigger, m2);
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(inner, WRAP);
+            blp.topMargin = dp(12);
+            card.addView(btns, blp);
             makeHandle(card, null);
         } else {
             // ---- QRを大きく
