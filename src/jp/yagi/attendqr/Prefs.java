@@ -26,6 +26,8 @@ final class Prefs {
     static final String K_CARD_SMALL = "cardSmall"; // 小さいチップで出すか
     static final String K_CARD_Y = "cardY";         // 小さなカードの位置（下端からの距離px）
     static final String K_ACCENT = "accent";       // アクセントカラー
+    static final String K_FOLLOW = "followFirst"; // 1限がない日は最初の授業に合わせる
+    static final int LATE_LEN = 40;                // その日の表示時間（分）
     static final String K_SKIP = "skipDate";       // スキップする日 (yyyymmdd)
     static final String K_LAST_ALARM = "lastAlarm"; // 最後に開始処理が動いた時刻(ms)
     static final String K_LAST_SHOWN = "lastShown"; // 最後にロック画面へ出た時刻(ms)
@@ -42,6 +44,7 @@ final class Prefs {
     static int mode(Context c) {
         return sp(c).getInt(K_MODE, MODE_FLOAT) == MODE_CARD ? MODE_CARD : MODE_FLOAT;
     }
+    static boolean followFirst(Context c) { return sp(c).getBoolean(K_FOLLOW, true); }
     static boolean bright(Context c) { return sp(c).getBoolean(K_BRIGHT, true); }
     static boolean wake(Context c) { return sp(c).getBoolean(K_WAKE, false); }
     static boolean alarmClock(Context c) { return sp(c).getBoolean(K_ALARMCLOCK, true); }

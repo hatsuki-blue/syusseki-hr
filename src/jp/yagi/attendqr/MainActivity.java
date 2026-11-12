@@ -414,6 +414,10 @@ public class MainActivity extends Activity {
             }
         });
 
+        c.addView(prefToggle("1限がない日は授業に合わせる",
+                "最初の授業が3限からの日などは、表示を後ろへずらします（3限からなら 10:00〜10:40）。時間割をもとに判定します",
+                Prefs.K_FOLLOW, Prefs.followFirst(this)));
+
         // 曜日
         TextView dl = Ui.text(this, "表示する曜日", 15, Ui.INK, Ui.REGULAR);
         dl.setPadding(0, dp(12), 0, dp(10));

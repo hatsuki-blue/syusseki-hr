@@ -113,17 +113,28 @@ final class TT {
         sort(list);
         JSONArray a = new JSONArray();
         for (Entry e : list) a.put(e.toJson());
-        Prefs.sp(c).edit().putString("tt_" + cls, a.toString()).apply();
+        Prefs.sp(c).edit().putString("tt_" + cls, a.toString()).commit();
+        Scheduler.sync(c); // 最初の授業が変わると表示時間帯も変わる
     }
 
     static void reset(Context c, String cls) {
-        Prefs.sp(c).edit().remove("tt_" + cls).apply();
+        Prefs.sp(c).edit().remove("tt_" + cls).commit();
+        Scheduler.sync(c);
     }
 
     static List<Entry> forDay(Context c, String cls, int day) {
         List<Entry> out = new ArrayList<Entry>();
         for (Entry e : load(c, cls)) if (e.day == day) out.add(e);
         return out;
+    }
+
+    /** その曜日の最初の授業の開始時限。授業がなければ 0。 */
+    static int firstPeriod(Context c, String cls, int day) {
+        int first = 0;
+        for (Entry e : load(c, cls)) {
+            if (e.day == day && (first == 0 || e.s < first)) first = e.s;
+        }
+        return first;
     }
 
     private static void sort(List<Entry> list) {

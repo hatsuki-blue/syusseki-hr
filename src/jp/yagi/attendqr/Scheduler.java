@@ -17,6 +17,25 @@ final class Scheduler {
     static final String ACTION_END = "jp.yagi.attendqr.END";
     static final String ACTION_DONE = "jp.yagi.attendqr.DONE";
 
+    /**
+     * その日の表示時間帯 {開始, 終了}（0時からの分）。
+     * 1限がない日は、最初の授業の開始に合わせて後ろへずらす
+     * （例：3限から始まる日は 10:00〜10:40）。
+     */
+    static int[] window(Context c, Calendar cal) {
+        int s = Prefs.startMin(c), e = Prefs.endMin(c);
+        if (Prefs.followFirst(c)) {
+            int first = TT.firstPeriod(c, Prefs.cls(c), Prefs.dayIndex(cal));
+            int shift = first > 1 ? TT.startOf(first) - TT.startOf(1) : 0;
+            if (shift > 0 && s < e) {
+                int e2 = Math.min(24 * 60 - 1, e + shift);
+                int s2 = Math.max(s, e2 - Math.min(Prefs.LATE_LEN, e - s));
+                return new int[]{s2, e2};
+            }
+        }
+        return new int[]{s, e};
+    }
+
     /** 設定された曜日・時間帯の中にいるか（テスト表示は含まない）。 */
     static boolean inWindow(Context c) {
         if (!Prefs.enabled(c)) return false;
@@ -26,7 +45,8 @@ final class Scheduler {
         if (Prefs.sp(c).getInt(Prefs.K_DONE, 0) == key) return false;
         if (Prefs.sp(c).getInt(Prefs.K_SKIP, 0) == key) return false;
         int m = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE);
-        int s = Prefs.startMin(c), e = Prefs.endMin(c);
+        int[] w = window(c, cal);
+        int s = w[0], e = w[1];
         return s < e && m >= s && m < e;
     }
 
@@ -42,7 +62,7 @@ final class Scheduler {
         long test = Prefs.testUntil(c);
         long end = 0;
         Calendar cal = Calendar.getInstance();
-        int e = Prefs.endMin(c);
+        int e = window(c, cal)[1];
         boolean inWindow = inWindow(c);
         if (inWindow) {
             cal.set(Calendar.HOUR_OF_DAY, e / 60);
@@ -63,11 +83,12 @@ final class Scheduler {
         if ((days & 0x7F) == 0 || s >= e) return 0;
         long now = System.currentTimeMillis();
         Calendar cal = Calendar.getInstance();
-        cal.set(Calendar.HOUR_OF_DAY, s / 60);
-        cal.set(Calendar.MINUTE, s % 60);
-        cal.set(Calendar.SECOND, 0);
-        cal.set(Calendar.MILLISECOND, 0);
         for (int i = 0; i < 8; i++) {
+            int ws = window(c, cal)[0];
+            cal.set(Calendar.HOUR_OF_DAY, ws / 60);
+            cal.set(Calendar.MINUTE, ws % 60);
+            cal.set(Calendar.SECOND, 0);
+            cal.set(Calendar.MILLISECOND, 0);
             if (cal.getTimeInMillis() > now && (days & (1 << Prefs.dayIndex(cal))) != 0
                     && Prefs.sp(c).getInt(Prefs.K_SKIP, 0) != Prefs.dateKey(cal)) {
                 return cal.getTimeInMillis();
